@@ -29,6 +29,7 @@
 
         .container { max-width: 1400px; margin: 0 auto; }
 
+        /* Header & Nav */
         header {
             display: flex; justify-content: space-between; align-items: center;
             padding-bottom: 20px; border-bottom: 1px solid var(--border); margin-bottom: 20px;
@@ -36,13 +37,33 @@
         
         h1 { margin: 0; font-size: 1.5rem; letter-spacing: -1px; }
         h1 span { color: var(--green); }
-        
-        .status-pill {
-            font-size: 0.8rem; background: rgba(0, 255, 135, 0.1); color: var(--green);
-            padding: 6px 12px; border-radius: 20px; border: 1px solid rgba(0, 255, 135, 0.2);
+
+        /* NEW: Dropdown Controls */
+        .controls-area {
+            display: flex; align-items: center; gap: 15px;
         }
 
-        /* --- NEW: Wins Leaderboard --- */
+        .gw-select {
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text-main);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 0.9rem;
+            outline: none;
+            cursor: pointer;
+            transition: border-color 0.2s;
+        }
+        .gw-select:hover { border-color: var(--green); }
+        .gw-select option { background: #222; color: #fff; } /* Dropdown items background */
+
+        .status-pill {
+            font-size: 0.75rem; color: var(--green); font-weight: bold; 
+            background: rgba(0, 255, 135, 0.1); padding: 5px 10px; border-radius: 20px;
+            border: 1px solid rgba(0, 255, 135, 0.2);
+        }
+
+        /* Leaderboard */
         .wins-section {
             background: rgba(255, 255, 255, 0.03);
             border: 1px solid var(--border);
@@ -86,7 +107,6 @@
         .team-info h2 { margin: 0; font-size: 1.1rem; }
         .manager-name { font-size: 0.85rem; color: var(--text-dim); display: block; margin-top: 2px; }
 
-        /* Badges */
         .chip-badge {
             display: inline-block; font-size: 0.65rem; background: var(--pink); color: white;
             padding: 2px 8px; border-radius: 10px; text-transform: uppercase; font-weight: bold;
@@ -101,7 +121,7 @@
         .score-val { font-size: 1.6rem; font-weight: 800; color: var(--green); display: block; }
         .score-lbl { font-size: 0.7rem; text-transform: uppercase; color: var(--text-dim); letter-spacing: 1px; }
 
-        /* --- UPDATED: Big Font Transfer Styles --- */
+        /* Transfer Styles (Big Font) */
         .transfer-section {
             background: rgba(0,0,0,0.3); padding: 15px 20px; border-bottom: 1px solid var(--border);
         }
@@ -115,15 +135,11 @@
         .tx-col { display: flex; flex-direction: column; gap: 6px; }
         .tx-col-title { font-size: 0.75rem; font-weight: bold; margin-bottom: 6px; opacity: 0.8; }
         
-        /* Bigger Fonts Here */
         .tx-item { 
-            font-size: 1.1rem; /* Bigger Name */
-            display: flex; justify-content: space-between; align-items: center;
-            font-weight: 500;
+            font-size: 1.1rem; display: flex; justify-content: space-between; align-items: center; font-weight: 500;
         }
         .tx-item-pts { 
-            font-size: 1rem; /* Bigger Points */
-            opacity: 0.9; font-weight: bold; margin-left: 8px;
+            font-size: 1rem; opacity: 0.9; font-weight: bold; margin-left: 8px;
         }
 
         .col-in { color: var(--green); }
@@ -162,17 +178,21 @@
 <div class="container">
     <header>
         <h1>FPL <span>Live</span></h1>
-        <div id="status" class="status-pill">Connecting...</div>
+        
+        <div class="controls-area">
+            <select id="gw-select" class="gw-select" onchange="switchGW(this.value)">
+                </select>
+            <div id="status-pill" class="status-pill">Loading...</div>
+        </div>
     </header>
 
     <div id="wins-section" class="wins-section" style="display:none;">
         <div class="wins-header">🏆 Gameweek Wins Leaderboard</div>
-        <div id="wins-grid" class="wins-grid">
-            </div>
+        <div id="wins-grid" class="wins-grid"></div>
     </div>
 
     <div id="grid" class="grid">
-        <div class="loading">Fetching live data...</div>
+        <div class="loading">Fetching data...</div>
     </div>
 </div>
 
@@ -181,6 +201,10 @@
     const PROXY_URL = "/api/proxy?endpoint=";
     const CHIPS = { '3xc': 'Triple Captain', 'bboost': 'Bench Boost', 'freehit': 'Free Hit', 'wildcard': 'Wildcard' };
 
+    let staticData = null;
+    let currentLiveGW = null; 
+    let viewingGW = null; 
+
     async function getData(endpoint) {
         const response = await fetch(PROXY_URL + encodeURIComponent(endpoint));
         if (!response.ok) throw new Error("API Request Failed");
@@ -188,25 +212,65 @@
     }
 
     async function init() {
+        try {
+            // Fetch Bootstrap Static
+            staticData = await getData('/bootstrap-static/');
+            
+            // Determine active gameweek
+            const eventInfo = staticData.events.find(e => e.is_current) || staticData.events.find(e => e.is_next);
+            currentLiveGW = eventInfo.id;
+            viewingGW = currentLiveGW;
+            
+            // Populate Dropdown
+            populateDropdown(currentLiveGW);
+
+            // Load Data
+            loadGameweekData(viewingGW);
+
+        } catch (error) {
+            console.error(error);
+            document.getElementById('grid').innerHTML = `<div class="error"><h3>Init Error</h3><p>${error.message}</p></div>`;
+        }
+    }
+
+    function populateDropdown(maxGW) {
+        const select = document.getElementById('gw-select');
+        select.innerHTML = '';
+        for(let i = 1; i <= maxGW; i++) {
+            const opt = document.createElement('option');
+            opt.value = i;
+            opt.text = `Gameweek ${i}`;
+            if(i === maxGW) opt.selected = true;
+            select.appendChild(opt);
+        }
+    }
+
+    async function switchGW(gw) {
+        viewingGW = parseInt(gw);
+        loadGameweekData(viewingGW);
+    }
+
+    async function loadGameweekData(gw) {
         const grid = document.getElementById('grid');
-        const statusEl = document.getElementById('status');
+        const statusEl = document.getElementById('status-pill');
         const winsSection = document.getElementById('wins-section');
         const winsGrid = document.getElementById('wins-grid');
 
-        try {
-            const staticData = await getData('/bootstrap-static/');
-            const eventInfo = staticData.events.find(e => e.is_current) || staticData.events.find(e => e.is_next);
-            const GW = eventInfo.id;
-            
-            statusEl.innerHTML = `Gameweek ${GW} • ${eventInfo.finished ? 'Finished' : 'Live'}`;
-            const liveData = await getData(`/event/${GW}/live/`);
+        // Check status of this specific GW
+        const gwInfo = staticData.events.find(e => e.id === gw);
+        const gwStatusText = gwInfo.finished ? 'Finished' : 'Live';
+        statusEl.innerHTML = gwStatusText;
+        statusEl.style.color = gwInfo.finished ? '#8f90a0' : 'var(--green)';
 
-            grid.innerHTML = ''; 
+        grid.innerHTML = '<div class="loading">Updating...</div>';
+
+        try {
+            const liveData = await getData(`/event/${gw}/live/`);
             
             const teamPromises = IDS.map(async (managerId) => {
                 const [entry, picks, transfersHistory, history] = await Promise.all([
                     getData(`/entry/${managerId}/`),
-                    getData(`/entry/${managerId}/event/${GW}/picks/`),
+                    getData(`/entry/${managerId}/event/${gw}/picks/`),
                     getData(`/entry/${managerId}/transfers/`),
                     getData(`/entry/${managerId}/history/`)
                 ]);
@@ -215,10 +279,13 @@
 
             const rawTeams = await Promise.all(teamPromises);
 
-            // --- CALCULATE WINS ---
+            // --- CALCULATE WINS (History based) ---
             const winCounts = {};
             IDS.forEach(id => winCounts[id] = 0);
-            const historyLength = rawTeams[0].history.current.length; // Completed GWs
+            
+            // Note: Use currentLiveGW for history calculation to keep leaderboard consistent
+            // regardless of which week you are viewing
+            const historyLength = rawTeams[0].history.current.length;
             
             for(let i = 0; i < historyLength; i++) {
                 let maxScore = -9999;
@@ -236,7 +303,7 @@
 
             // Render Wins Leaderboard
             const winsArray = rawTeams.map(t => ({
-                name: t.entry.name,
+                name: `${t.entry.player_first_name} ${t.entry.player_last_name}`,
                 wins: winCounts[t.managerId]
             }));
             winsArray.sort((a,b) => b.wins - a.wins);
@@ -253,7 +320,7 @@
             winsGrid.innerHTML = winsHtml;
             winsSection.style.display = 'block';
 
-            // --- PROCESS CARDS ---
+            // --- PROCESS CARDS FOR SELECTED GW ---
             const processedTeams = rawTeams.map(t => {
                 const { entry, picks, transfersHistory, managerId } = t;
                 const activeChip = picks.active_chip;
@@ -276,8 +343,9 @@
                     };
                 });
 
+                // Transfer Logic
                 let totalGain = 0;
-                const currentTransfers = transfersHistory.filter(tx => tx.event === GW).map(tx => {
+                const currentTransfers = transfersHistory.filter(tx => tx.event === gw).map(tx => {
                     const pInLive = liveData.elements.find(el => el.id === tx.element_in);
                     const pOutLive = liveData.elements.find(el => el.id === tx.element_out);
                     
@@ -310,10 +378,12 @@
                 };
             });
 
+            // Sort by Score
             processedTeams.sort((a, b) => b.score - a.score);
 
+            grid.innerHTML = '';
             processedTeams.forEach(team => {
-                grid.innerHTML += renderCard(team, GW);
+                grid.innerHTML += renderCard(team, gw);
             });
 
         } catch (error) {
@@ -325,7 +395,7 @@
     function renderCard(team, gw) {
         let chipHtml = team.chip && CHIPS[team.chip] ? `<span class="chip-badge">${CHIPS[team.chip]}</span>` : '';
 
-        // Two Column Transfer HTML
+        // Transfer Section
         let transferHtml = '';
         if(team.transfers.length > 0) {
             const costDisplay = team.cost > 0 ? `<span class="gain-badge" style="background:var(--pink)">-${team.cost}</span>` : '';
@@ -396,7 +466,7 @@
                     <a href="https://fantasy.premierleague.com/entry/${team.id}/event/${gw}" target="_blank" class="fpl-link">FPL ↗</a>
                 </div>
                 <div class="score-board">
-                    <div class="score-item"><span class="score-val">${team.score}</span><span class="score-lbl">Live GW</span></div>
+                    <div class="score-item"><span class="score-val">${team.score}</span><span class="score-lbl">GW ${gw}</span></div>
                     <div class="score-item"><span class="score-val">${team.total}</span><span class="score-lbl">Total</span></div>
                 </div>
                 ${transferHtml}
@@ -405,7 +475,9 @@
         `;
     }
 
+    // Start
     init();
+
 </script>
 </body>
 </html>
