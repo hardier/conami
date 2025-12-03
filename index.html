@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FPL Live Hub</title>
+    
+    <script src="config.js"></script>
+
     <style>
         :root {
             --bg-dark: #0f0f13;
@@ -152,39 +155,56 @@
 </div>
 
 <script>
-    const IDS = [210891, 24654, 11440, 11803, 129756, 469902, 2294, 81808];
+    // FPL API Base
     const FPL_BASE = "https://fantasy.premierleague.com/api";
     const CHIPS = { '3xc': 'Triple Captain', 'bboost': 'Bench Boost', 'freehit': 'Free Hit', 'wildcard': 'Wildcard' };
 
-    // --- SMART PROXY FALLBACK SYSTEM ---
+    // --- PROXY SYSTEM ---
     const PROXIES = [
+        (url) => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
         (url) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
-        (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
         (url) => `https://thingproxy.freeboard.io/fetch/${url}`
     ];
 
     let currentProxyIndex = 0;
     let staticData, currentLiveGW, viewingGW;
 
+    // Retry logic
     async function getData(endpoint) {
         const targetUrl = FPL_BASE + endpoint;
         try {
             const proxyUrl = PROXIES[currentProxyIndex](targetUrl);
             const res = await fetch(proxyUrl);
             if (!res.ok) throw new Error("Proxy error");
-            return await res.json();
+            
+            const data = await res.json();
+            
+            // AllOrigins wraps response in "contents"
+            if (data.contents && currentProxyIndex === 0) {
+                return JSON.parse(data.contents);
+            }
+            return data;
+
         } catch (e) {
             console.warn(`Proxy ${currentProxyIndex} failed, switching...`);
             currentProxyIndex = (currentProxyIndex + 1) % PROXIES.length;
-            const backupUrl = PROXIES[currentProxyIndex](targetUrl);
-            const res2 = await fetch(backupUrl);
-            if (!res2.ok) throw new Error("All proxies failed");
-            return await res2.json();
+            
+            // Try one more time with new proxy
+            const proxyUrl = PROXIES[currentProxyIndex](targetUrl);
+            const res = await fetch(proxyUrl);
+            const data = await res.json();
+            if (data.contents && currentProxyIndex === 0) return JSON.parse(data.contents);
+            return data;
         }
     }
 
     async function init() {
         try {
+            // Check if Config File Loaded
+            if (typeof TRACKING_IDS === 'undefined') {
+                throw new Error("config.js not found. Make sure you created the config.js file.");
+            }
+
             staticData = await getData('/bootstrap-static/');
             
             const eventInfo = staticData.events.find(e => e.is_current) || staticData.events.find(e => e.is_next);
@@ -196,7 +216,10 @@
 
         } catch (error) {
             console.error(error);
-            document.getElementById('grid').innerHTML = `<div class="error"><h3>Connection Failed</h3><p>Unable to connect via any public proxy.</p></div>`;
+            document.getElementById('grid').innerHTML = `<div class="error">
+                <h3>Connection Failed</h3>
+                <p>${error.message}</p>
+            </div>`;
         }
     }
 
@@ -233,7 +256,7 @@
         try {
             const liveData = await getData(`/event/${gw}/live/`);
             
-            const teamPromises = IDS.map(async (managerId) => {
+            const teamPromises = TRACKING_IDS.map(async (managerId) => {
                 const [entry, picks, transfersHistory, history] = await Promise.all([
                     getData(`/entry/${managerId}/`),
                     getData(`/entry/${managerId}/event/${gw}/picks/`),
@@ -247,7 +270,7 @@
 
             // --- WINS CALCULATION ---
             const winCounts = {};
-            IDS.forEach(id => winCounts[id] = 0);
+            TRACKING_IDS.forEach(id => winCounts[id] = 0);
             const historyLength = rawTeams[0].history.current.length;
             
             for(let i = 0; i < historyLength; i++) {
@@ -321,10 +344,10 @@
                 });
 
                 const cost = picks.entry_history.event_transfers_cost;
-                // Subtract cost from GW Score for display
+                // Subtract cost from GW Score
                 const netScore = gwScore - cost;
                 
-                // Subtract cost from Transfer Net Gain
+                // Subtract cost from Net Gain
                 const netTransferGain = totalGain - cost;
 
                 return {
