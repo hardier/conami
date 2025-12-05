@@ -32,6 +32,7 @@
 
         .container { max-width: 1400px; margin: 0 auto; }
 
+        /* Header */
         header {
             display: flex; justify-content: space-between; align-items: center;
             padding-bottom: 20px; border-bottom: 1px solid var(--border); margin-bottom: 20px;
@@ -47,29 +48,57 @@
         }
         .gw-select:hover { border-color: var(--green); }
         .gw-select option { background: #222; color: #fff; }
+        
         .status-pill {
             font-size: 0.75rem; color: var(--green); font-weight: bold; 
             background: rgba(0, 255, 135, 0.1); padding: 5px 10px; border-radius: 20px;
             border: 1px solid rgba(0, 255, 135, 0.2); min-width: 80px; text-align: center;
         }
 
-        .wins-section {
-            background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border);
-            border-radius: 12px; padding: 15px 20px; margin-bottom: 30px;
+        /* --- LEADERBOARDS --- */
+        .leaderboard-container {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-bottom: 30px;
         }
-        .wins-header {
-            font-size: 0.75rem; text-transform: uppercase; color: var(--text-dim); margin-bottom: 12px; letter-spacing: 1px; font-weight: bold;
-        }
-        .wins-grid { display: flex; flex-wrap: wrap; gap: 15px; }
-        .win-badge {
-            background: rgba(0,0,0,0.3); padding: 8px 15px; border-radius: 8px;
-            display: flex; align-items: center; gap: 10px; border: 1px solid transparent;
-        }
-        .win-badge.leader { border-color: var(--gold); background: rgba(255, 215, 0, 0.1); }
-        .win-count { font-size: 1.2rem; font-weight: 800; color: #fff; }
-        .win-badge.leader .win-count { color: var(--gold); }
-        .win-team { font-size: 0.9rem; color: var(--text-dim); }
 
+        .stats-section {
+            background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border);
+            border-radius: 12px; padding: 20px; /* Increased padding */
+        }
+        
+        /* UPDATED HEADER STYLES */
+        .wins-header {
+            font-size: 1.2rem; /* Much Bigger */
+            text-transform: uppercase; 
+            margin-bottom: 15px; 
+            letter-spacing: 0.5px; 
+            font-weight: 900; /* Extra Bold */
+            border-bottom: 2px solid rgba(255,255,255,0.05); /* Divider */
+            padding-bottom: 10px;
+            display: flex; align-items: center; gap: 10px;
+        }
+        .text-gold { color: var(--gold); text-shadow: 0 0 20px rgba(255, 215, 0, 0.2); }
+        .text-pink { color: var(--pink); text-shadow: 0 0 20px rgba(233, 0, 82, 0.2); }
+
+        .stats-grid { display: flex; flex-wrap: wrap; gap: 10px; }
+        
+        .stat-badge {
+            background: rgba(0,0,0,0.3); padding: 8px 14px; border-radius: 8px;
+            display: flex; align-items: center; gap: 12px; border: 1px solid transparent; flex: 1 1 45%;
+        }
+        
+        /* Win Styles */
+        .stat-badge.win-leader { border-color: var(--gold); background: rgba(255, 215, 0, 0.1); }
+        .win-val { font-size: 1.2rem; font-weight: 800; color: #fff; }
+        .stat-badge.win-leader .win-val { color: var(--gold); }
+
+        /* Loss Styles */
+        .stat-badge.loss-leader { border-color: var(--pink); background: rgba(233, 0, 82, 0.1); }
+        .loss-val { font-size: 1.2rem; font-weight: 800; color: #fff; }
+        .stat-badge.loss-leader .loss-val { color: var(--pink); }
+
+        .stat-name { font-size: 0.9rem; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+        /* --- CARDS --- */
         .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 25px; }
         .card {
             background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px;
@@ -97,6 +126,7 @@
         .score-hit { font-size: 0.8rem; color: var(--pink); vertical-align: super; margin-left: 2px; font-weight: bold; }
         .score-lbl { font-size: 0.7rem; text-transform: uppercase; color: var(--text-dim); letter-spacing: 1px; }
 
+        /* Transfer Styles */
         .transfer-section { background: rgba(0,0,0,0.3); padding: 15px 20px; border-bottom: 1px solid var(--border); }
         .transfer-header {
             display: flex; justify-content: space-between; align-items: center;
@@ -144,9 +174,18 @@
         </div>
     </header>
 
-    <div id="wins-section" class="wins-section" style="display:none;">
-        <div class="wins-header">🏆 Gameweek Wins Leaderboard</div>
-        <div id="wins-grid" class="wins-grid"></div>
+    <div id="leaderboard-container" class="leaderboard-container" style="display:none;">
+        
+        <div class="stats-section">
+            <div class="wins-header text-gold">🏆 Most 1st Places</div>
+            <div id="wins-grid" class="stats-grid"></div>
+        </div>
+
+        <div class="stats-section">
+            <div class="wins-header text-pink">🥄 Most Last Places</div>
+            <div id="losses-grid" class="stats-grid"></div>
+        </div>
+
     </div>
 
     <div id="grid" class="grid">
@@ -155,11 +194,9 @@
 </div>
 
 <script>
-    // FPL API Base
     const FPL_BASE = "https://fantasy.premierleague.com/api";
     const CHIPS = { '3xc': 'Triple Captain', 'bboost': 'Bench Boost', 'freehit': 'Free Hit', 'wildcard': 'Wildcard' };
 
-    // --- PROXY SYSTEM ---
     const PROXIES = [
         (url) => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
         (url) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
@@ -169,30 +206,22 @@
     let currentProxyIndex = 0;
     let staticData, currentLiveGW, viewingGW;
 
-    // Retry logic
     async function getData(endpoint) {
         const targetUrl = FPL_BASE + endpoint;
         try {
             const proxyUrl = PROXIES[currentProxyIndex](targetUrl);
             const res = await fetch(proxyUrl);
             if (!res.ok) throw new Error("Proxy error");
-            
             const data = await res.json();
-            
-            // AllOrigins wraps response in "contents"
-            if (data.contents && currentProxyIndex === 0) {
-                return JSON.parse(data.contents);
-            }
+            if (data.contents && currentProxyIndex === 0) return JSON.parse(data.contents);
             return data;
-
         } catch (e) {
             console.warn(`Proxy ${currentProxyIndex} failed, switching...`);
             currentProxyIndex = (currentProxyIndex + 1) % PROXIES.length;
-            
-            // Try one more time with new proxy
-            const proxyUrl = PROXIES[currentProxyIndex](targetUrl);
-            const res = await fetch(proxyUrl);
-            const data = await res.json();
+            const backupUrl = PROXIES[currentProxyIndex](targetUrl);
+            const res2 = await fetch(backupUrl);
+            if (!res2.ok) throw new Error("All proxies failed");
+            const data = await res2.json();
             if (data.contents && currentProxyIndex === 0) return JSON.parse(data.contents);
             return data;
         }
@@ -200,13 +229,9 @@
 
     async function init() {
         try {
-            // Check if Config File Loaded
-            if (typeof TRACKING_IDS === 'undefined') {
-                throw new Error("config.js not found. Make sure you created the config.js file.");
-            }
+            if (typeof TRACKING_IDS === 'undefined') throw new Error("config.js not found.");
 
             staticData = await getData('/bootstrap-static/');
-            
             const eventInfo = staticData.events.find(e => e.is_current) || staticData.events.find(e => e.is_next);
             currentLiveGW = eventInfo.id;
             viewingGW = currentLiveGW;
@@ -216,10 +241,7 @@
 
         } catch (error) {
             console.error(error);
-            document.getElementById('grid').innerHTML = `<div class="error">
-                <h3>Connection Failed</h3>
-                <p>${error.message}</p>
-            </div>`;
+            document.getElementById('grid').innerHTML = `<div class="error"><h3>Connection Failed</h3><p>${error.message}</p></div>`;
         }
     }
 
@@ -243,8 +265,9 @@
     async function loadGameweekData(gw) {
         const grid = document.getElementById('grid');
         const statusEl = document.getElementById('status-pill');
-        const winsSection = document.getElementById('wins-section');
+        const lbContainer = document.getElementById('leaderboard-container');
         const winsGrid = document.getElementById('wins-grid');
+        const lossesGrid = document.getElementById('losses-grid');
 
         const gwInfo = staticData.events.find(e => e.id === gw);
         const isFinished = gwInfo ? gwInfo.finished : false;
@@ -268,44 +291,57 @@
 
             const rawTeams = await Promise.all(teamPromises);
 
-            // --- WINS CALCULATION ---
+            // --- LEADERBOARD CALCULATIONS ---
             const winCounts = {};
-            TRACKING_IDS.forEach(id => winCounts[id] = 0);
+            const lossCounts = {};
+            TRACKING_IDS.forEach(id => { winCounts[id] = 0; lossCounts[id] = 0; });
+            
             const historyLength = rawTeams[0].history.current.length;
             
             for(let i = 0; i < historyLength; i++) {
                 let maxScore = -9999;
+                let minScore = 9999;
+
+                // Pass 1: Determine Max/Min
                 rawTeams.forEach(t => {
                     const d = t.history.current[i];
                     if(d) {
                         const score = d.points - d.event_transfers_cost;
                         if(score > maxScore) maxScore = score;
+                        if(score < minScore) minScore = score;
                     }
                 });
+
+                // Pass 2: Award
                 rawTeams.forEach(t => {
                     const d = t.history.current[i];
                     if(d) {
                         const score = d.points - d.event_transfers_cost;
                         if(score === maxScore) winCounts[t.managerId]++;
+                        if(score === minScore) lossCounts[t.managerId]++;
                     }
                 });
             }
 
-            const winsArray = rawTeams.map(t => ({
-                name: `${t.entry.player_first_name} ${t.entry.player_last_name}`,
-                wins: winCounts[t.managerId]
-            }));
-            winsArray.sort((a,b) => b.wins - a.wins);
+            // Render Wins
+            const winsArray = rawTeams.map(t => ({ name: `${t.entry.player_first_name} ${t.entry.player_last_name}`, val: winCounts[t.managerId] }));
+            winsArray.sort((a,b) => b.val - a.val);
+            winsGrid.innerHTML = winsArray.map((w, i) => {
+                const isLeader = i === 0 && w.val > 0 ? 'win-leader' : '';
+                return `<div class="stat-badge ${isLeader}"><div class="win-val">${w.val}</div><div class="stat-name">${w.name}</div></div>`;
+            }).join('');
 
-            let winsHtml = '';
-            winsArray.forEach((w, index) => {
-                const leaderClass = index === 0 && w.wins > 0 ? 'leader' : '';
-                winsHtml += `<div class="win-badge ${leaderClass}"><div class="win-count">${w.wins}</div><div class="win-team">${w.name}</div></div>`;
-            });
-            winsGrid.innerHTML = winsHtml;
-            winsSection.style.display = 'block';
+            // Render Losses
+            const lossesArray = rawTeams.map(t => ({ name: `${t.entry.player_first_name} ${t.entry.player_last_name}`, val: lossCounts[t.managerId] }));
+            lossesArray.sort((a,b) => b.val - a.val);
+            lossesGrid.innerHTML = lossesArray.map((w, i) => {
+                const isLeader = i === 0 && w.val > 0 ? 'loss-leader' : '';
+                return `<div class="stat-badge ${isLeader}"><div class="loss-val">${w.val}</div><div class="stat-name">${w.name}</div></div>`;
+            }).join('');
 
-            // --- RENDER TEAMS ---
+            lbContainer.style.display = 'grid';
+
+            // --- CARDS ---
             const processedTeams = rawTeams.map(t => {
                 const { entry, picks, transfersHistory, managerId } = t;
                 const activeChip = picks.active_chip;
@@ -321,10 +357,7 @@
                     return {
                         name: pStatic.web_name,
                         points: totalPoints,
-                        isCap: pick.multiplier === 2,
-                        isTC: pick.multiplier === 3,
-                        isVice: pick.is_vice_captain,
-                        mult: pick.multiplier
+                        isCap: pick.multiplier === 2, isTC: pick.multiplier === 3, isVice: pick.is_vice_captain, mult: pick.multiplier
                     };
                 });
 
@@ -344,10 +377,7 @@
                 });
 
                 const cost = picks.entry_history.event_transfers_cost;
-                // Subtract cost from GW Score
                 const netScore = gwScore - cost;
-                
-                // Subtract cost from Net Gain
                 const netTransferGain = totalGain - cost;
 
                 return {
@@ -372,14 +402,9 @@
 
     function renderCard(team, gw) {
         let chipHtml = team.chip && CHIPS[team.chip] ? `<span class="chip-badge">${CHIPS[team.chip]}</span>` : '';
-
-        // Hit Indicator
         let scoreDisplay = team.score;
-        if(team.cost > 0) {
-            scoreDisplay = `${team.score} <span class="score-hit">(-${team.cost})</span>`;
-        }
+        if(team.cost > 0) scoreDisplay = `${team.score} <span class="score-hit">(-${team.cost})</span>`;
 
-        // Transfers
         let transferHtml = '';
         if(team.transfers.length > 0) {
             const costDisplay = team.cost > 0 ? `<span class="gain-badge" style="background:var(--pink)">-${team.cost}</span>` : '';
@@ -398,7 +423,6 @@
             transferHtml = `<div class="transfer-section"><span class="no-transfers">No transfers</span></div>`;
         }
 
-        // Players
         let playersHtml = '';
         const starters = team.squad.filter(p => p.mult > 0);
         const bench = team.squad.filter(p => p.mult === 0);
